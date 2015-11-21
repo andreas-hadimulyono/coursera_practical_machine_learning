@@ -102,16 +102,102 @@ dim(training)</code></pre>
 <pre><code>## [1] 5885   53</code></pre>
 <p>That leaves us with 13737 observations for training set and 5885 observations for test set.</p>
 </div>
-<div id="building-model" class="section level2">
-<h2>BUILDING MODEL</h2>
+<div id="model" class="section level2">
+<h2>MODEL</h2>
 <p>As the dataset is quite large, running the training with the caret default may take too long to run in commodity hardware.</p>
-<p>A train control is chosen to try to get a balance between speed and accuracy. The model computation also will be run with parallel processing to try to speed it up. A seed variable is set to ensure that the model is reproducible.</p>
+<p>A train control and some tuning parameters are chosen to try to get a balance between speed and accuracy. The model computation also will be run with parallel processing to try to speed it up. A seed variable is set to ensure that the model is reproducible.</p>
 <pre class="r"><code>set.seed(98765)
 
 seeds &lt;- vector(mode = &quot;list&quot;, length = 11)
 for(i in 1:10) seeds[[i]]&lt;- sample.int(n=1000, ncol(training) - 2)
 
-trainControlFunction &lt;- trainControl(method='cv', seeds=seeds, index=createFolds(training$classe))</code></pre>
+trainControlFunction &lt;- trainControl(method='cv', seeds=seeds, index=createFolds(training$classe))
+
+numberOfTrees &lt;- 200
+cl &lt;- makeCluster(detectCores())
+ registerDoParallel(cl)</code></pre>
+<p>With the control and parameters, we will now try to build the model.</p>
+<pre class="r"><code>model &lt;- train(classe ~ ., method='rf', trControl=trainControlFunction, ntree=numberOfTrees,importance=TRUE,data=training)</code></pre>
+<p>The final model printout describes the estimated out of bag error rate for the random forest.</p>
+<pre class="r"><code>model$finalModel</code></pre>
+<pre><code>## 
+## Call:
+##  randomForest(x = x, y = y, ntree = ..1, mtry = param$mtry, importance = TRUE) 
+##                Type of random forest: classification
+##                      Number of trees: 200
+## No. of variables tried at each split: 27
+## 
+##         OOB estimate of  error rate: 0.82%
+## Confusion matrix:
+##      A    B    C    D    E class.error
+## A 3900    2    2    0    2 0.001536098
+## B   22 2623   12    1    0 0.013167795
+## C    0   17 2367   12    0 0.012103506
+## D    0    3   23 2223    3 0.012877442
+## E    0    0    6    8 2511 0.005544554</code></pre>
+<p>From the model, we can take a look at the top 20 most important variables.</p>
+<pre class="r"><code>varImp(model)</code></pre>
+<pre><code>## rf variable importance
+## 
+##   variables are sorted by maximum importance across the classes
+##   only 20 most important variables shown (out of 52)
+## 
+##                       A     B     C     D      E
+## roll_belt         73.98 81.90 77.51 73.62 100.00
+## pitch_forearm     59.34 74.01 93.88 58.31  55.28
+## pitch_belt        28.04 90.50 59.52 47.72  36.20
+## magnet_dumbbell_y 61.11 64.67 83.27 66.44  57.16
+## yaw_belt          64.32 67.51 67.48 70.53  44.12
+## magnet_dumbbell_z 69.29 51.22 69.21 42.93  46.71
+## accel_forearm_x   19.34 39.43 37.09 51.02  36.41
+## roll_forearm      48.88 36.61 43.73 33.58  33.56
+## gyros_dumbbell_y  36.63 27.38 45.09 24.30  18.09
+## accel_dumbbell_y  33.42 30.28 43.88 30.19  29.77
+## gyros_belt_z      19.43 24.77 32.92 23.24  42.91
+## yaw_arm           38.94 24.63 23.51 29.42  17.09
+## accel_dumbbell_z  25.68 28.88 22.04 30.90  30.45
+## magnet_belt_x     12.47 30.35 27.53 10.73  21.86
+## magnet_arm_z      15.23 28.72 21.43 17.15  11.51
+## gyros_arm_y       22.75 28.50 21.71 23.39  17.31
+## roll_dumbbell     18.39 28.41 19.60 22.81  27.20
+## magnet_forearm_z  24.81 24.97 22.87 25.66  28.05
+## magnet_belt_y     13.51 27.88 20.67 15.50  21.83
+## magnet_belt_z     16.26 27.56 23.46 23.36  17.94</code></pre>
+</div>
+<div id="test" class="section level2">
+<h2>TEST</h2>
+<p>We now run our test set against the model.</p>
+<pre class="r"><code>prediction &lt;- predict(model, test)
+numberOfCorrect &lt;- sum(prediction == test$classe)
+numberOfIncorrect &lt;- sum(prediction != test$classe)
+table(prediction,test$classe)</code></pre>
+<pre><code>##           
+## prediction    A    B    C    D    E
+##          A 1670    9    0    1    0
+##          B    4 1126    6    0    0
+##          C    0    4 1015   14    1
+##          D    0    0    5  949    6
+##          E    0    0    0    0 1075</code></pre>
+<p>The wrong prediction is 50. There were 5885 number of observation in test set, so the out of sample error rate is 0.0084962 which is close to the estimated error rate from the model.</p>
+</div>
+<div id="submission" class="section level2">
+<h2>SUBMISSION</h2>
+<p>The model is now run against the submission data set.</p>
+<pre class="r"><code>testGetUrl &lt;- getURL(&quot;http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;)
+testData &lt;- read.csv(text = testGetUrl, na.strings=c(&quot;&quot;, &quot;NA&quot;))
+testData_noNA &lt;- testData[,colSums(is.na(testData)) == 0]
+testDatasetFinal &lt;- testData_noNA[, -which(names(testData_noNA) %in% removedColumns)]
+predsubmission &lt;- predict(model, testDatasetFinal)
+predsubmission</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
+</div>
+<div id="citations" class="section level2">
+<h2>CITATIONS</h2>
+<p>Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers’ Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. Cited by 2 (Google Scholar)</p>
+<p>Read more: <a href="http://groupware.les.inf.puc-rio.br/har#ixzz3s8G44b8o" class="uri">http://groupware.les.inf.puc-rio.br/har#ixzz3s8G44b8o</a></p>
+<p>Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13) . Stuttgart, Germany: ACM SIGCHI, 2013.</p>
+<p>Read more: <a href="http://groupware.les.inf.puc-rio.br/har#ixzz3s8Fo9qYK" class="uri">http://groupware.les.inf.puc-rio.br/har#ixzz3s8Fo9qYK</a></p>
 </div>
 
 

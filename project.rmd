@@ -71,7 +71,7 @@ dim(test)
 That leaves us with `r dim(training)[1]` observations for training set and `r dim(test)[1]` observations for test set.
 
 
-## BUILDING MODEL
+## MODEL
 
 As the dataset is quite large, running the training with the caret default may take too long to run in commodity hardware.
 
@@ -86,22 +86,75 @@ for(i in 1:10) seeds[[i]]<- sample.int(n=1000, ncol(training) - 2)
 
 trainControlFunction <- trainControl(method='cv', seeds=seeds, index=createFolds(training$classe))
 
-numberOfTrees <- 100
+numberOfTrees <- 200
 cl <- makeCluster(detectCores())
  registerDoParallel(cl)
 ```
 
 With the control and parameters, we will now try to build the model.
 
-``` {r buildModel}
+``` {r buildModel, cache=TRUE}
 
-
+model <- train(classe ~ ., method='rf', trControl=trainControlFunction, ntree=numberOfTrees,importance=TRUE,data=training)
 
 ```
 
+The final model printout describes the estimated out of bag error rate for the random forest. This would be the expected error rate when we run the model against the test set later.
 
+``` {r oobAndConfusionMatrix}
 
+model$finalModel
 
+```
+
+From the model, we can take a look at the top 20 most important variables.
+
+``` {r varImpMethod}
+
+varImp(model)
+
+```
+
+## TEST
+
+We now run our test set against the model.
+
+``` {r testModel}
+
+prediction <- predict(model, test)
+numberOfCorrect <- sum(prediction == test$classe)
+numberOfIncorrect <- sum(prediction != test$classe)
+table(prediction,test$classe)
+
+```
+
+The wrong prediction is `r numberOfIncorrect`. There were `r dim(test)[1]` number of observation in test set, so the out of sample error rate is `r numberOfIncorrect/dim(test)[1]` which is close to the estimated error rate from the model.
+
+## SUBMISSION
+
+The model is now run against the submission data set.
+
+``` {r getAndCleanTestData}
+
+testGetUrl <- getURL("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+testData <- read.csv(text = testGetUrl, na.strings=c("", "NA"))
+testData_noNA <- testData[,colSums(is.na(testData)) == 0]
+testDatasetFinal <- testData_noNA[, -which(names(testData_noNA) %in% removedColumns)]
+predsubmission <- predict(model, testDatasetFinal)
+predsubmission
+
+```
+
+## CITATIONS
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+Cited by 2 (Google Scholar)
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3s8G44b8o
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3s8Fo9qYK
 
 
 
