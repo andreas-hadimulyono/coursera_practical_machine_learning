@@ -1,22 +1,107 @@
 ---
-title: "Project"
+title: "Practical Machine Learning Project"
 author: "Andreas Hadimulyono"
 date: "Saturday, November 21, 2015"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## ABSTRACT
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
 
-```{r}
-summary(cars)
+This project aims to predict the manner of an exercise given all the predictors in the data set. The project start by getting and filtering the data, followed by partitioning the data into training and test set. The training set will then be used to make a prediction model using random forest algorithm. The final model will then be used on the test data set to evaluate the accuracy of the model.
+
+## GETTING AND FILTERING DATA
+
+``` {r libraries, message=FALSE, warning=FALSE, error=FALSE, results="hide", echo=FALSE}
+require(bitops)
+require(RCurl)
+require(caret)
+require(randomForest)
+require(doParallel)
+
 ```
 
-You can also embed plots, for example:
+The original data set for this project can be taken from this URL: http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv.
 
-```{r, echo=FALSE}
-plot(cars)
+``` {r downloadAndParseCsv, cache=TRUE, message=FALSE, warning=FALSE}
+csvFromUrl <- getURL("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+For the purpose of the algorithm building, we will remove the columns which have NA values.
+
+``` {r removingNAValues}
+
+originalDataSet <- read.csv(text = csvFromUrl, na.strings=c("", "NA"))
+dataset_noNA <- originalDataSet[,colSums(is.na(originalDataSet)) == 0]
+dim(dataset_noNA)
+
+```
+
+There are also columns which are not really relevant to the prediction, such as user names and timestamp relevant columns. Those columns are also removed. 
+
+
+``` {r removeNonRelevantColumn}
+
+removedColumns <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window")
+datasetFinal <- dataset_noNA[, -which(names(dataset_noNA) %in% removedColumns)]
+dim(datasetFinal)
+
+```
+
+So we arrived at our final dataset, which contains `r dim(datasetFinal)[1]` observations of `r dim(datasetFinal)[2]` variables. One of them would be the outcome and `r dim(datasetFinal)[2] - 1` are predictors.
+
+## PARTITIONING DATA SETS
+
+We will split the data set, 70% for training and 30% for testing. The variable 'classe' is used as the outcome.
+
+
+``` {r partitioningDataSets}
+
+set.seed(12345)
+inTrain <- createDataPartition(y = datasetFinal$classe, p = 0.7, list=FALSE)
+training <- datasetFinal[inTrain,]
+test <- datasetFinal[-inTrain,]
+
+dim(training)
+dim(test)
+
+```
+
+That leaves us with `r dim(training)[1]` observations for training set and `r dim(test)[1]` observations for test set.
+
+
+## BUILDING MODEL
+
+As the dataset is quite large, running the training with the caret default may take too long to run in commodity hardware.
+
+A train control and some tuning parameters are chosen to try to get a balance between speed and accuracy. The model computation also will be run with parallel processing to try to speed it up. A seed variable is set to ensure that the model is reproducible.
+
+
+``` {r trainControl}
+set.seed(98765)
+
+seeds <- vector(mode = "list", length = 11)
+for(i in 1:10) seeds[[i]]<- sample.int(n=1000, ncol(training) - 2)
+
+trainControlFunction <- trainControl(method='cv', seeds=seeds, index=createFolds(training$classe))
+
+numberOfTrees <- 100
+cl <- makeCluster(detectCores())
+ registerDoParallel(cl)
+```
+
+With the control and parameters, we will now try to build the model.
+
+``` {r buildModel}
+
+
+
+```
+
+
+
+
+
+
+
